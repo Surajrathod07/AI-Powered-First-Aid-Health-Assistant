@@ -1,7 +1,9 @@
-import { GoogleGenAI } from "@google/genai";
-import { AnalysisRequest } from "../types";
+
+import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { AnalysisRequest, ChatSession, StructuredAIResponse } from "../types";
 
 // Initialize the client
+// Using gemini-2.5-flash which is generally available and supports vision
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
@@ -30,7 +32,6 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
 export const generateMedicalReport = async (request: AnalysisRequest): Promise<string> => {
   const { patientDetails, clinicalContext, imageFile } = request;
 
-  // 1. Construct the Structured Prompt
   const prompt = `
   You are an expert medical consultant and senior radiologist AI. Your task is to analyze the provided patient details, clinical context, and optional medical imaging to produce a professional, structured medical report.
 
@@ -61,7 +62,6 @@ export const generateMedicalReport = async (request: AnalysisRequest): Promise<s
      - **Safety Disclaimer**: Standard medical disclaimer.
   3. Use cautious medical language ("suggests", "is consistent with", "could represent"). NEVER claim 100% certainty.
   4. DO NOT recommend specific prescription drug dosages or brand names. Suggest general classes of treatment (e.g., "anti-inflammatories", "rest", "immobilization").
-  5. If the image is unclear or low quality, state this clearly in the findings.
   `;
 
   try {
@@ -72,22 +72,117 @@ export const generateMedicalReport = async (request: AnalysisRequest): Promise<s
       parts.push(imagePart);
     }
 
-    // Use Gemini 3 Pro Image Preview for high-fidelity medical image analysis
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-2.5-flash',
       contents: {
         parts: parts
       },
       config: {
         systemInstruction: "You are a helpful, safety-conscious medical AI assistant. You provide information for educational and informational purposes only. You are not a doctor.",
-        temperature: 0.4, // Lower temperature for more analytical/factual responses
+        temperature: 0.4, 
       }
     });
 
     return response.text || "Unable to generate report. Please try again.";
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI Service Error:", error);
+    if (error.message?.includes('403') || error.status === 403) {
+        throw new Error("Access denied. The API key may be invalid or lacks permission for this model.");
+    }
     throw new Error("Failed to analyze data. Please check your connection and try again.");
   }
+};
+
+
+/**
+ * Chat functionality for the Clinical Assistant module.
+ * Returns a JSON object to populate the structured UI.
+ */
+export const chatWithMedicalAI = async (
+    session: ChatSession, 
+    userMessage: string, 
+    imageFile: File | null
+): Promise<StructuredAIResponse> => {
+    
+    // Construct context from session history
+    const contextPrompt = `
+    Patient Profile: ${JSON.stringify(session.patientSummary)}
+    
+    History of present conversation:
+    ${session.messages.map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n')}
+    
+    Current User Query: ${userMessage}
+    `;
+
+    // Strict Schema Definition
+    const schema: Schema = {
+      type: Type.OBJECT,
+      properties: {
+        summary: { type: Type.STRING, description: "Main conversational text response (human friendly, 2-3 sentences max)" },
+        differentialDiagnosis: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              condition: { type: Type.STRING },
+              reasoning: { type: Type.STRING },
+              confidence: { type: Type.NUMBER, description: "0-100 score" },
+            },
+            required: ["condition", "reasoning", "confidence"]
+          }
+        },
+        recommendedActions: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        },
+        suggestedMedications: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        },
+        redFlags: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        },
+        confidenceScore: { type: Type.NUMBER, description: "Overall confidence 0-100" }
+      },
+      required: ["summary", "differentialDiagnosis", "recommendedActions", "confidenceScore"]
+    };
+
+    try {
+        const parts: any[] = [{ text: contextPrompt }];
+
+        if (imageFile) {
+            const imagePart = await fileToGenerativePart(imageFile);
+            parts.push(imagePart);
+        }
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts },
+            config: { 
+                systemInstruction: "You are an AI Clinical Assistant. Provide a helpful, accurate, and safe medical response. Return your answer strictly as a JSON object adhering to the schema. Do not provide specific dosages. Do not diagnose definitively.",
+                responseMimeType: 'application/json',
+                responseSchema: schema,
+                temperature: 0.2 // Lower temperature for more deterministic JSON
+            }
+        });
+
+        if (!response.text) throw new Error("Empty response");
+        
+        // Parse JSON
+        return JSON.parse(response.text) as StructuredAIResponse;
+
+    } catch (error) {
+        console.error("Chat AI Error", error);
+        // Fallback response structure
+        return {
+            summary: "I'm having trouble connecting to the medical knowledge base right now. Please try again or seek professional care if urgent.",
+            differentialDiagnosis: [],
+            recommendedActions: ["Consult a doctor", "Try again later"],
+            suggestedMedications: [],
+            redFlags: [],
+            confidenceScore: 0
+        };
+    }
 };

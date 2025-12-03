@@ -1,3 +1,4 @@
+
 export enum AgeGroup {
   INFANT = 'Infant (0-2)',
   CHILD = 'Child (3-12)',
@@ -60,4 +61,37 @@ export interface AnalysisRequest {
   patientDetails: PatientDetails;
   clinicalContext: string;
   imageFile: File | null;
+}
+
+// Chat Module Types
+
+export interface Differential {
+    condition: string;
+    reasoning: string;
+    confidence: number;
+}
+
+export interface StructuredAIResponse {
+    summary: string;
+    differentialDiagnosis: Differential[];
+    recommendedActions: string[];
+    suggestedMedications: string[];
+    redFlags: string[];
+    confidenceScore: number;
+}
+
+export interface ChatMessage {
+    id: string;
+    role: 'user' | 'model';
+    text: string;
+    timestamp: number;
+    attachments?: string[];
+    structuredResponse?: StructuredAIResponse;
+}
+
+export interface ChatSession {
+    id: string;
+    startTime: number;
+    messages: ChatMessage[];
+    patientSummary: PatientDetails;
 }
