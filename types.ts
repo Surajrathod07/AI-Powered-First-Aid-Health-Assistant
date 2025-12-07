@@ -95,3 +95,22 @@ export interface ChatSession {
     messages: ChatMessage[];
     patientSummary: PatientDetails;
 }
+
+// Care Finder Module Types
+
+export interface CarePlace {
+  id: string; // generated or place_id
+  name: string;
+  type: 'Hospital' | 'Pharmacy' | 'Clinic' | 'Other';
+  address: string;
+  distanceKm: number; // calculated or provided
+  rating?: number;
+  userRatingsTotal?: number;
+  isOpenNow?: boolean;
+  phoneNumber?: string;
+  googleMapsUrl?: string;
+  summary?: string; // AI generated note
+  coordinates?: { lat: number; lng: number };
+}
+
+export type ViewState = 'dashboard' | 'radiology' | 'chat' | 'care-finder';

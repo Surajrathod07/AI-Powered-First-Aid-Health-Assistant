@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { AnalysisRequest, ChatSession, StructuredAIResponse } from "../types";
+import { AnalysisRequest, ChatSession, StructuredAIResponse, CarePlace } from "../types";
 
 // Initialize the client
 // Using gemini-2.5-flash which is generally available and supports vision
@@ -185,4 +185,68 @@ export const chatWithMedicalAI = async (
             confidenceScore: 0
         };
     }
+};
+
+/**
+ * Finds nearby care places using Gemini grounded in Google Maps.
+ */
+export const findNearbyPlaces = async (
+  lat: number, 
+  lng: number, 
+  queryType: 'Hospital' | 'Pharmacy' | 'Both',
+  radiusKm: number,
+  manualLocation?: string
+): Promise<CarePlace[]> => {
+
+  const locationStr = manualLocation ? manualLocation : `${lat}, ${lng}`;
+  const typeStr = queryType === 'Both' ? 'Hospitals and Pharmacies' : queryType + 's';
+
+  const prompt = `
+  I am currently at location: ${locationStr}.
+  Please find the nearest ${typeStr} within ${radiusKm} km of me using Google Maps.
+  
+  Return a strict JSON array of objects. Do not include markdown code blocks.
+  Each object should have:
+  - name (string)
+  - type (string: Hospital, Pharmacy, Clinic, or Other)
+  - address (string: full address)
+  - distanceKm (number: estimate distance from my location)
+  - rating (number: 1-5, 0 if unavailable)
+  - userRatingsTotal (number)
+  - isOpenNow (boolean)
+  - phoneNumber (string)
+  - googleMapsUrl (string: link to the place on maps)
+  - summary (string: a very short 10-word description of quality or specialty grounded in reviews/metadata)
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        tools: [{ googleMaps: {} }],
+        // Note: responseSchema + googleMaps tool can be unstable in some versions, 
+        // so we rely on prompt engineering for JSON output here, or we can try to parse strictly.
+        // We will attempt to parse the text response as JSON.
+      }
+    });
+    
+    const text = response.text || "[]";
+    
+    // Attempt to clean markdown if present (e.g. ```json ... ```)
+    const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    const places = JSON.parse(jsonStr);
+    
+    // Add IDs if missing
+    return places.map((p: any, idx: number) => ({
+      ...p,
+      id: p.id || `place-${idx}-${Date.now()}`
+    })) as CarePlace[];
+
+  } catch (error) {
+    console.error("Care Finder AI Error", error);
+    // Return empty array instead of crashing, UI will handle empty state
+    return [];
+  }
 };
