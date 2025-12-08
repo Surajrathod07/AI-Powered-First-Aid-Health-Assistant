@@ -132,4 +132,12 @@ export interface FamilyMessageRequest {
   contacts: Contact[];
 }
 
-export type ViewState = 'dashboard' | 'radiology' | 'chat' | 'care-finder' | 'family-alert';
+export type ViewState = 
+  | 'landing' 
+  | 'auth-login' 
+  | 'auth-signup' 
+  | 'dashboard' 
+  | 'radiology' 
+  | 'chat' 
+  | 'care-finder' 
+  | 'family-alert';

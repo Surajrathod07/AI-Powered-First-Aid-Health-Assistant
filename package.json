@@ -12,7 +12,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "@google/genai": "^1.30.0",
-    "jspdf": "^2.5.1"
+    "jspdf": "^2.5.1",
+    "@supabase/supabase-js": "^2.86.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
