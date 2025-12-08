@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { AnalysisRequest, ChatSession, StructuredAIResponse, CarePlace } from "../types";
+import { AnalysisRequest, ChatSession, StructuredAIResponse, CarePlace, Contact } from "../types";
 
 // Initialize the client
 // Using gemini-2.5-flash which is generally available and supports vision
@@ -214,9 +214,12 @@ export const findNearbyPlaces = async (
   - rating (number: 1-5, 0 if unavailable)
   - userRatingsTotal (number)
   - isOpenNow (boolean)
-  - phoneNumber (string)
+  - openingHours (string: brief summary e.g. "Open 24 hours" or "Closes 9PM")
+  - phoneNumber (string: formatted phone number)
   - googleMapsUrl (string: link to the place on maps)
   - summary (string: a very short 10-word description of quality or specialty grounded in reviews/metadata)
+  - priorityScore (number: 0-100 score based on distance, rating, and open status. High score for open, close, and highly rated.)
+  - isTopRecommendation (boolean: set to true ONLY for the single best option in the list)
   `;
 
   try {
@@ -226,8 +229,7 @@ export const findNearbyPlaces = async (
       config: {
         tools: [{ googleMaps: {} }],
         // Note: responseSchema + googleMaps tool can be unstable in some versions, 
-        // so we rely on prompt engineering for JSON output here, or we can try to parse strictly.
-        // We will attempt to parse the text response as JSON.
+        // so we rely on prompt engineering for JSON output here.
       }
     });
     
@@ -236,9 +238,9 @@ export const findNearbyPlaces = async (
     // Attempt to clean markdown if present (e.g. ```json ... ```)
     const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
     
-    const places = JSON.parse(jsonStr);
+    let places = JSON.parse(jsonStr);
     
-    // Add IDs if missing
+    // Add IDs if missing and sanitise
     return places.map((p: any, idx: number) => ({
       ...p,
       id: p.id || `place-${idx}-${Date.now()}`
@@ -248,5 +250,45 @@ export const findNearbyPlaces = async (
     console.error("Care Finder AI Error", error);
     // Return empty array instead of crashing, UI will handle empty state
     return [];
+  }
+};
+
+/**
+ * Generates a short, friendly family alert message in the target language.
+ */
+export const generateFamilyMessage = async (
+  medicalSummary: string,
+  patientName: string,
+  language: string
+): Promise<string> => {
+  const prompt = `
+  You are a helpful assistant assisting a patient named "${patientName || 'User'}".
+  
+  The patient has the following medical status summary:
+  "${medicalSummary}"
+
+  Write a short, natural, and reassuring WhatsApp/SMS message from the patient to their family member.
+  
+  Requirements:
+  - Language: ${language} (If Hindi or Marathi, use natural script but easy to read, or mixed english-script if common).
+  - Tone: Personal, calm, informative, not alarming.
+  - Content: State briefly what the issue is, what the AI tool said (briefly), and next steps (e.g., "I will rest" or "Going to doctor").
+  - Length: Under 50 words.
+  - End with a reassuring emoji if appropriate.
+  - Do NOT include "Subject:" lines or formal headers. Just the message body.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        temperature: 0.7,
+      }
+    });
+    return response.text?.trim() || "Could not generate message.";
+  } catch (error) {
+    console.error("Family Message AI Error", error);
+    return `Hi, this is ${patientName}. I used MedScan AI. Here is my status: ${medicalSummary}`;
   }
 };

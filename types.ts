@@ -107,10 +107,29 @@ export interface CarePlace {
   rating?: number;
   userRatingsTotal?: number;
   isOpenNow?: boolean;
+  openingHours?: string;
   phoneNumber?: string;
   googleMapsUrl?: string;
   summary?: string; // AI generated note
   coordinates?: { lat: number; lng: number };
+  priorityScore?: number; // 0-100
+  isTopRecommendation?: boolean;
 }
 
-export type ViewState = 'dashboard' | 'radiology' | 'chat' | 'care-finder';
+// Family Alert Types
+
+export interface Contact {
+  id: string;
+  name: string;
+  relation: string;
+  phone: string;
+  language: 'English' | 'Hindi' | 'Marathi';
+}
+
+export interface FamilyMessageRequest {
+  medicalSummary: string;
+  patientName: string;
+  contacts: Contact[];
+}
+
+export type ViewState = 'dashboard' | 'radiology' | 'chat' | 'care-finder' | 'family-alert';

@@ -12,7 +12,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
   const isDashboard = currentView === 'dashboard';
 
   const navClass = (view: ViewState, activeColor: string, activeBg: string) => 
-    `px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+    `px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
         currentView === view 
         ? `${activeBg} ${activeColor} shadow-sm border border-current/20` 
         : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
@@ -40,7 +40,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex items-center bg-slate-800/50 rounded-lg p-1 border border-white/5 overflow-x-auto max-w-full">
+        <nav className="flex items-center bg-slate-800/50 rounded-lg p-1 border border-white/5 overflow-x-auto max-w-full no-scrollbar">
            <button 
              onClick={() => onNavigate?.('dashboard')}
              className={navClass('dashboard', 'text-white', 'bg-slate-700')}
@@ -64,6 +64,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
              className={navClass('care-finder', 'text-red-400', 'bg-red-900/50')}
            >
              Find Care
+           </button>
+           <button 
+             onClick={() => onNavigate?.('family-alert')}
+             className={navClass('family-alert', 'text-pink-400', 'bg-pink-900/50')}
+           >
+             Family Alert
            </button>
         </nav>
 
