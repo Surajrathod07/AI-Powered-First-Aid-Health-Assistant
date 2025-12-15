@@ -1,9 +1,10 @@
+
 import React from 'react';
-import { PatientDetails, AgeGroup, Sex, SymptomType, Duration, PainSeverity, ReportFocus } from '../types';
+import { PatientDetails, Sex, SymptomType, Duration, PainSeverity, ReportFocus } from '../types';
 
 interface PatientFormProps {
   details: PatientDetails;
-  onChange: (field: keyof PatientDetails, value: string) => void;
+  onChange: (field: keyof PatientDetails, value: string | number) => void;
 }
 
 const PatientForm: React.FC<PatientFormProps> = ({ details, onChange }) => {
@@ -19,7 +20,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ details, onChange }) => {
         Patient Details
       </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Name */}
         <div>
           <label className={labelClass}>Patient Name (Optional)</label>
@@ -32,18 +33,18 @@ const PatientForm: React.FC<PatientFormProps> = ({ details, onChange }) => {
           />
         </div>
 
-        {/* Age Group */}
+        {/* Numeric Age */}
         <div>
-          <label className={labelClass}>Age Group</label>
-          <select
-            value={details.ageGroup}
-            onChange={(e) => onChange('ageGroup', e.target.value)}
-            className={inputClass}
-          >
-            {Object.values(AgeGroup).map((v) => (
-              <option key={v} value={v}>{v}</option>
-            ))}
-          </select>
+             <label className={labelClass}>Age (Years)</label>
+             <input
+                type="number"
+                min="0"
+                max="120"
+                value={details.age || ''}
+                onChange={(e) => onChange('age', parseInt(e.target.value) || 0)}
+                placeholder="e.g. 35"
+                className={inputClass}
+             />
         </div>
 
         {/* Sex */}
@@ -103,7 +104,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ details, onChange }) => {
         </div>
 
         {/* Report Focus - Spans full width on mobile, 2 cols on lg */}
-        <div className="md:col-span-2 lg:col-span-3">
+        <div className="md:col-span-2">
           <label className={labelClass}>Preferred AI Response Focus</label>
           <select
             value={details.reportFocus}

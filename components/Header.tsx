@@ -82,6 +82,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
             >
                 Family Alert
             </button>
+            <button 
+                onClick={() => onNavigate?.('health-profile')}
+                className={navClass('health-profile', 'text-blue-400', 'bg-blue-900/50')}
+            >
+                My Profile
+            </button>
             </nav>
         )}
 

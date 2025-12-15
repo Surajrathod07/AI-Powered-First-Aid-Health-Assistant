@@ -10,6 +10,7 @@ import FamilyAlertView from './components/FamilyAlertView';
 import LandingPage from './components/LandingPage';
 import LoginView from './components/LoginView';
 import SignupView from './components/SignupView';
+import HealthProfileView from './components/HealthProfileView';
 import { ViewState } from './types';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -79,6 +80,8 @@ const AppContent: React.FC = () => {
         return <NearbyCareFinder />;
       case 'family-alert':
         return <FamilyAlertView initialSummary={sharedData.summary} patientName={sharedData.patientName} />;
+      case 'health-profile':
+        return <HealthProfileView onNavigate={handleNavigate} />;
       case 'dashboard':
       default:
         return <Dashboard onNavigate={handleNavigate} />;

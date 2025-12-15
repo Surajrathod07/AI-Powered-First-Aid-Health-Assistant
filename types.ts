@@ -1,12 +1,4 @@
 
-export enum AgeGroup {
-  INFANT = 'Infant (0-2)',
-  CHILD = 'Child (3-12)',
-  TEEN = 'Teen (13-18)',
-  ADULT = 'Adult (19-64)',
-  SENIOR = 'Senior (65+)'
-}
-
 export enum Sex {
   MALE = 'Male',
   FEMALE = 'Female',
@@ -49,7 +41,7 @@ export enum ReportFocus {
 
 export interface PatientDetails {
   name: string;
-  ageGroup: AgeGroup;
+  age: number; // Numeric age is now mandatory
   sex: Sex;
   symptomType: SymptomType;
   duration: Duration;
@@ -63,6 +55,58 @@ export interface AnalysisRequest {
   imageFile: File | null;
 }
 
+// Health Profile Types
+export interface UserHealthProfile {
+  id?: string;
+  user_id?: string;
+  full_name: string;
+  age_group: string; 
+  gender: string;
+  conditions: string[];
+  allergies: string;
+  medications: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  blood_group: string;
+  preferred_language: 'English' | 'Hindi' | 'Marathi';
+  updated_at?: string;
+}
+
+// Report Generation Types
+export type RiskLevel = "low" | "moderate" | "emergency";
+
+export interface SuggestedMedicine {
+  name: string;             
+  form: "tablet"|"syrup"|"cream"|"ointment";
+  strength: string;         
+  dose: string;             
+  frequency: string;        
+  timing: string;           
+  maxDailyDose?: string;    
+  ageLimit?: string;        
+  contraindications?: string[];
+  notes?: string;           
+}
+
+export interface ReportPayload {
+  reportId: string;
+  generatedAt: string; // ISO date
+  patient: {
+    name?: string;
+    ageYears: number;   
+    sex?: string;
+  };
+  contextText?: string;      
+  riskLevel: RiskLevel;
+  clinicalSummary: string;   
+  possibleCauses: { name: string; confidence?: string }[]; 
+  recommendedActions: string[]; 
+  suggestedMedicines?: SuggestedMedicine[]; 
+  redFlags?: string[]; // "When to see a doctor"
+  disclaimer: string;
+  generatedBy: string;       
+}
+
 // Chat Module Types
 
 export interface Differential {
@@ -73,9 +117,10 @@ export interface Differential {
 
 export interface StructuredAIResponse {
     summary: string;
+    riskLevel: RiskLevel; // Added for professional report generation
     differentialDiagnosis: Differential[];
     recommendedActions: string[];
-    suggestedMedications: string[];
+    suggestedMedications: SuggestedMedicine[]; // Updated to strict type
     redFlags: string[];
     confidenceScore: number;
 }
@@ -91,7 +136,9 @@ export interface ChatMessage {
 
 export interface ChatSession {
     id: string;
+    title: string; 
     startTime: number;
+    lastUpdated: number; 
     messages: ChatMessage[];
     patientSummary: PatientDetails;
 }
@@ -99,20 +146,20 @@ export interface ChatSession {
 // Care Finder Module Types
 
 export interface CarePlace {
-  id: string; // generated or place_id
+  id: string; 
   name: string;
   type: 'Hospital' | 'Pharmacy' | 'Clinic' | 'Other';
   address: string;
-  distanceKm: number; // calculated or provided
+  distanceKm: number; 
   rating?: number;
   userRatingsTotal?: number;
   isOpenNow?: boolean;
   openingHours?: string;
   phoneNumber?: string;
   googleMapsUrl?: string;
-  summary?: string; // AI generated note
+  summary?: string; 
   coordinates?: { lat: number; lng: number };
-  priorityScore?: number; // 0-100
+  priorityScore?: number; 
   isTopRecommendation?: boolean;
 }
 
@@ -140,4 +187,5 @@ export type ViewState =
   | 'radiology' 
   | 'chat' 
   | 'care-finder' 
-  | 'family-alert';
+  | 'family-alert'
+  | 'health-profile';

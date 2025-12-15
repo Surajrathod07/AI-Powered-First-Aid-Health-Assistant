@@ -1,14 +1,11 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { AnalysisRequest, ChatSession, StructuredAIResponse, CarePlace, Contact } from "../types";
+import { AnalysisRequest, ChatSession, StructuredAIResponse, CarePlace, Contact, ReportPayload } from "../types";
+import { getHealthContextBlock } from "./profileService";
 
 // Initialize the client
-// Using gemini-2.5-flash which is generally available and supports vision
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-/**
- * Converts a File object to a Base64 string for the API.
- */
 const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -28,41 +25,103 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
 
 /**
  * Generates the medical report based on structured inputs.
+ * Returns a ReportPayload JSON object.
  */
-export const generateMedicalReport = async (request: AnalysisRequest): Promise<string> => {
+export const generateMedicalReport = async (request: AnalysisRequest): Promise<ReportPayload> => {
   const { patientDetails, clinicalContext, imageFile } = request;
+  
+  // Inject Profile Context
+  const healthContext = await getHealthContextBlock();
 
   const prompt = `
-  You are an expert medical consultant and senior radiologist AI. Your task is to analyze the provided patient details, clinical context, and optional medical imaging to produce a professional, structured medical report.
+  ${healthContext}
+
+  You are a CALM, EXPERIENCED, and PRACTICAL medical support assistant.
+  Your task is to generate a professional medical summary for a patient.
 
   --- PATIENT DETAILS ---
-  • Name: ${patientDetails.name || "Not provided"}
-  • Age Group: ${patientDetails.ageGroup}
+  • Name: ${patientDetails.name || "Anon"}
+  • Age: ${patientDetails.age} (Use this EXACT numeric age)
   • Sex: ${patientDetails.sex}
-  • Symptom Type: ${patientDetails.symptomType}
+  • Symptom: ${patientDetails.symptomType}
   • Duration: ${patientDetails.duration}
-  • Pain Severity: ${patientDetails.painSeverity}
+  • Pain: ${patientDetails.painSeverity}
 
   --- CLINICAL CONTEXT ---
-  ${clinicalContext || "No additional context provided."}
+  ${clinicalContext || "None"}
 
-  --- REQUESTED OUTPUT FOCUS ---
-  ${patientDetails.reportFocus}
+  --- TASK ---
+  Generate a JSON report following the strict schema.
 
-  --- INSTRUCTIONS ---
-  1. Analyze the inputs carefully. If an image is provided, act as a radiologist (X-ray, CT, MRI, Ultrasound specialist) and describe findings in technical detail.
-  2. Generate a structured report with the following sections (adapt based on the "Requested Output Focus"):
-     - **Title / Clinical Brief**: Summary of the case.
-     - **Image Findings**: (If image provided) Technical description of structures, abnormalities, or lack thereof.
-     - **Interpretation / Clinical Significance**: What does this mean clinically?
-     - **Possible Differential Diagnosis**: List potential causes ordered by likelihood.
-     - **Recommended Follow-up**: Next steps, tests, or specialist referrals.
-     - **Urgency Assessment**: Scale 0-5 with a clear action message (e.g., "Seek emergency care").
-     - **Layman Explanation**: A simple summary for non-medical users.
-     - **Safety Disclaimer**: Standard medical disclaimer.
-  3. Use cautious medical language ("suggests", "is consistent with", "could represent"). NEVER claim 100% certainty.
-  4. DO NOT recommend specific prescription drug dosages or brand names. Suggest general classes of treatment (e.g., "anti-inflammatories", "rest", "immobilization").
+  --- SAFETY & TONE RULES (CRITICAL) ---
+  1. **Tone**: Calm, reassuring, and professional. Like a kind family doctor explaining things to a patient.
+  2. **Panic Control**: 
+     - Never use alarmist language (e.g., "deadly", "fatal", "immediate danger").
+     - Even for serious symptoms, say: "These symptoms require professional medical attention."
+  3. **Causes**: List common, non-serious causes first. 
+  4. **Medicines**:
+     - Suggest OTC (Over-The-Counter) medicines ONLY.
+     - Include Name, Dosage, Frequency, and Timing (e.g. "After food").
+     - IF RISK LEVEL IS 'EMERGENCY', DO NOT SUGGEST ANY MEDICINES.
+  5. **When to See Doctor**:
+     - Provide clear, calm red flags. "If X happens, please see a doctor."
   `;
+
+  // Define strict schema for ReportPayload
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      reportId: { type: Type.STRING },
+      generatedAt: { type: Type.STRING },
+      patient: {
+        type: Type.OBJECT,
+        properties: {
+           name: { type: Type.STRING },
+           ageYears: { type: Type.NUMBER },
+           sex: { type: Type.STRING }
+        },
+        required: ["ageYears"]
+      },
+      riskLevel: { type: Type.STRING, enum: ["low", "moderate", "emergency"] },
+      clinicalSummary: { type: Type.STRING, description: "Section 2: Reported Symptoms & Summary" },
+      possibleCauses: {
+          type: Type.ARRAY,
+          items: {
+              type: Type.OBJECT,
+              properties: {
+                  name: { type: Type.STRING },
+                  confidence: { type: Type.STRING }
+              }
+          },
+          description: "Section 3: Possible Causes (Non-alarming first)"
+      },
+      suggestedMedicines: {
+          type: Type.ARRAY,
+          items: {
+              type: Type.OBJECT,
+              properties: {
+                  name: { type: Type.STRING },
+                  form: { type: Type.STRING, enum: ["tablet", "syrup", "cream", "ointment"] },
+                  strength: { type: Type.STRING },
+                  dose: { type: Type.STRING },
+                  frequency: { type: Type.STRING },
+                  timing: { type: Type.STRING },
+                  maxDailyDose: { type: Type.STRING },
+                  ageLimit: { type: Type.STRING },
+                  contraindications: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  notes: { type: Type.STRING }
+              },
+              required: ["name", "form", "dose", "frequency", "timing"]
+          },
+          description: "Section 4: Suggested Medicines"
+      },
+      recommendedActions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Section 5: Home Care & Self-Care" },
+      redFlags: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Section 6: When to See a Doctor (Calm guidance)" },
+      disclaimer: { type: Type.STRING, description: "Section 7: Disclaimer" },
+      generatedBy: { type: Type.STRING }
+    },
+    required: ["riskLevel", "clinicalSummary", "possibleCauses", "recommendedActions", "suggestedMedicines", "redFlags", "disclaimer"]
+  };
 
   try {
     const parts: any[] = [{ text: prompt }];
@@ -74,30 +133,40 @@ export const generateMedicalReport = async (request: AnalysisRequest): Promise<s
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: {
-        parts: parts
-      },
+      contents: { parts: parts },
       config: {
-        systemInstruction: "You are a helpful, safety-conscious medical AI assistant. You provide information for educational and informational purposes only. You are not a doctor.",
-        temperature: 0.4, 
+        responseMimeType: 'application/json',
+        responseSchema: schema,
+        temperature: 0.2, 
       }
     });
 
-    return response.text || "Unable to generate report. Please try again.";
+    if (!response.text) throw new Error("No response text");
+    
+    const payload = JSON.parse(response.text) as ReportPayload;
+    
+    // Post-processing fill-ins
+    payload.reportId = payload.reportId || `rep-${Date.now()}`;
+    payload.generatedAt = new Date().toISOString();
+    payload.patient.name = patientDetails.name || "Anon";
+    payload.patient.ageYears = patientDetails.age; // Ensure strict numeric age is kept
+
+    // Double check emergency rule
+    if (payload.riskLevel === 'emergency') {
+        payload.suggestedMedicines = []; // Clear meds
+    }
+
+    return payload;
 
   } catch (error: any) {
     console.error("AI Service Error:", error);
-    if (error.message?.includes('403') || error.status === 403) {
-        throw new Error("Access denied. The API key may be invalid or lacks permission for this model.");
-    }
-    throw new Error("Failed to analyze data. Please check your connection and try again.");
+    throw new Error("Failed to generate report. Please try again.");
   }
 };
 
 
 /**
  * Chat functionality for the Clinical Assistant module.
- * Returns a JSON object to populate the structured UI.
  */
 export const chatWithMedicalAI = async (
     session: ChatSession, 
@@ -105,8 +174,13 @@ export const chatWithMedicalAI = async (
     imageFile: File | null
 ): Promise<StructuredAIResponse> => {
     
+    // Inject Profile Context
+    const healthContext = await getHealthContextBlock();
+
     // Construct context from session history
     const contextPrompt = `
+    ${healthContext}
+
     Patient Profile: ${JSON.stringify(session.patientSummary)}
     
     History of present conversation:
@@ -119,7 +193,8 @@ export const chatWithMedicalAI = async (
     const schema: Schema = {
       type: Type.OBJECT,
       properties: {
-        summary: { type: Type.STRING, description: "Main conversational text response (human friendly, 2-3 sentences max)" },
+        summary: { type: Type.STRING, description: "Conversational text response." },
+        riskLevel: { type: Type.STRING, enum: ["low", "moderate", "emergency"], description: "Overall risk assessment" },
         differentialDiagnosis: {
           type: Type.ARRAY,
           items: {
@@ -137,8 +212,24 @@ export const chatWithMedicalAI = async (
           items: { type: Type.STRING }
         },
         suggestedMedications: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING }
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    form: { type: Type.STRING, enum: ["tablet", "syrup", "cream", "ointment"] },
+                    strength: { type: Type.STRING },
+                    dose: { type: Type.STRING },
+                    frequency: { type: Type.STRING },
+                    timing: { type: Type.STRING },
+                    maxDailyDose: { type: Type.STRING },
+                    ageLimit: { type: Type.STRING },
+                    contraindications: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    notes: { type: Type.STRING }
+                },
+                required: ["name", "form", "dose", "frequency", "timing"]
+            },
+            description: "Suggested OTC medicines. Must be empty if riskLevel is emergency."
         },
         redFlags: {
           type: Type.ARRAY,
@@ -146,8 +237,22 @@ export const chatWithMedicalAI = async (
         },
         confidenceScore: { type: Type.NUMBER, description: "Overall confidence 0-100" }
       },
-      required: ["summary", "differentialDiagnosis", "recommendedActions", "confidenceScore"]
+      required: ["summary", "riskLevel", "differentialDiagnosis", "recommendedActions", "suggestedMedications", "confidenceScore"]
     };
+
+    const SYSTEM_INSTRUCTION = `
+    You are a CALM, EXPERIENCED, and KIND medical assistant.
+    
+    CORE RULES:
+    1. **Calmness First**: Never use scary words like "heart attack" or "deadly" immediately.
+    2. **Reassurance**: Start by reassuring the patient.
+    3. **Safe Meds**: If symptoms are mild, suggest OTC medicines. ALWAYS include Name, Dose, Frequency, and Timing.
+    4. **Emergency**: If symptoms are severe, set riskLevel to "emergency" and advise seeing a doctor CALMLY. "It would be best to have a doctor check this."
+    5. **No Meds in Emergency**: If riskLevel is "emergency", suggestedMedications MUST be empty.
+    
+    OUTPUT:
+    Return a strict JSON object.
+    `;
 
     try {
         const parts: any[] = [{ text: contextPrompt }];
@@ -161,25 +266,24 @@ export const chatWithMedicalAI = async (
             model: 'gemini-2.5-flash',
             contents: { parts },
             config: { 
-                systemInstruction: "You are an AI Clinical Assistant. Provide a helpful, accurate, and safe medical response. Return your answer strictly as a JSON object adhering to the schema. Do not provide specific dosages. Do not diagnose definitively.",
+                systemInstruction: SYSTEM_INSTRUCTION,
                 responseMimeType: 'application/json',
                 responseSchema: schema,
-                temperature: 0.2 // Lower temperature for more deterministic JSON
+                temperature: 0.3 
             }
         });
 
         if (!response.text) throw new Error("Empty response");
         
-        // Parse JSON
         return JSON.parse(response.text) as StructuredAIResponse;
 
     } catch (error) {
         console.error("Chat AI Error", error);
-        // Fallback response structure
         return {
-            summary: "I'm having trouble connecting to the medical knowledge base right now. Please try again or seek professional care if urgent.",
+            summary: "I'm having a little trouble connecting to my medical database right now. Please try asking again in a moment. If you are in pain, try to rest comfortably.",
+            riskLevel: "low",
             differentialDiagnosis: [],
-            recommendedActions: ["Consult a doctor", "Try again later"],
+            recommendedActions: ["Consult a doctor if urgent", "Try again later"],
             suggestedMedications: [],
             redFlags: [],
             confidenceScore: 0
@@ -228,19 +332,14 @@ export const findNearbyPlaces = async (
       contents: { parts: [{ text: prompt }] },
       config: {
         tools: [{ googleMaps: {} }],
-        // Note: responseSchema + googleMaps tool can be unstable in some versions, 
-        // so we rely on prompt engineering for JSON output here.
       }
     });
     
     const text = response.text || "[]";
-    
-    // Attempt to clean markdown if present (e.g. ```json ... ```)
     const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
     
     let places = JSON.parse(jsonStr);
     
-    // Add IDs if missing and sanitise
     return places.map((p: any, idx: number) => ({
       ...p,
       id: p.id || `place-${idx}-${Date.now()}`
@@ -248,7 +347,6 @@ export const findNearbyPlaces = async (
 
   } catch (error) {
     console.error("Care Finder AI Error", error);
-    // Return empty array instead of crashing, UI will handle empty state
     return [];
   }
 };
@@ -261,7 +359,13 @@ export const generateFamilyMessage = async (
   patientName: string,
   language: string
 ): Promise<string> => {
+
+  // Inject Profile Context
+  const healthContext = await getHealthContextBlock();
+
   const prompt = `
+  ${healthContext}
+  
   You are a helpful assistant assisting a patient named "${patientName || 'User'}".
   
   The patient has the following medical status summary:
@@ -270,12 +374,12 @@ export const generateFamilyMessage = async (
   Write a short, natural, and reassuring WhatsApp/SMS message from the patient to their family member.
   
   Requirements:
-  - Language: ${language} (If Hindi or Marathi, use natural script but easy to read, or mixed english-script if common).
+  - Language: ${language} (If Hindi or Marathi, use natural script but easy to read).
   - Tone: Personal, calm, informative, not alarming.
-  - Content: State briefly what the issue is, what the AI tool said (briefly), and next steps (e.g., "I will rest" or "Going to doctor").
+  - Content: State briefly what the issue is, what the AI tool said, and next steps.
   - Length: Under 50 words.
-  - End with a reassuring emoji if appropriate.
-  - Do NOT include "Subject:" lines or formal headers. Just the message body.
+  - If the Health Profile indicates specific preferred language, prioritize that if "language" parameter is generic.
+  - End with a reassuring emoji.
   `;
 
   try {
