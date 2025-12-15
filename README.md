@@ -1,20 +1,79 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+🩺 MedScan AI 
 
-# Run and deploy your AI Studio app
+MedScan AI is an intelligent healthcare assistant designed to provide safe, calm, and structured medical guidance for everyday health concerns.
+It combines AI-driven clinical reasoning with a clean user interface to help users understand symptoms, receive responsible medicine suggestions, and generate downloadable medical reports.
 
-This contains everything you need to run your app locally.
+The system is built with a strong focus on user safety, non-panic responses, and clear medical communication.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1Iqx2VgPuECzIS7_z9yGaiQgu_YG4aXRX
+✨ Key Features
 
-## Run Locally
+💬 Clinical Chat Assistant
 
-**Prerequisites:**  Node.js
+Calm, human-friendly medical conversations
 
+Symptom understanding without fear-inducing language
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Age-aware responses using exact numeric age
+
+📄 Structured Health Reports
+
+Downloadable clinical summary reports (PDF)
+
+Clear sections: symptoms, possible causes, medicines, home care & warnings
+
+Designed for easy sharing with doctors or family
+
+💊 Safe Medicine Guidance
+
+Common OTC medicine suggestions
+
+Proper timing (before/after food)
+
+Age-appropriate dosage guidance (non-prescriptive)
+
+👨‍👩‍👧 Family Alert System
+
+Share health updates with trusted family members
+
+Useful in emergencies or ongoing care monitoring
+
+🔒 Privacy & Safety First
+
+Medical disclaimer included
+
+No panic-driven or extreme diagnosis language
+
+Informational guidance only, not medical diagnosis
+
+🎯 Problem It Solves
+
+Reduces confusion caused by alarming medical information online
+
+Helps users understand symptoms before panic
+
+Provides structured, readable medical reports instead of raw chat logs
+
+Bridges the gap between users and professional medical care
+
+🛠️ Tech Stack
+
+Frontend: React + TypeScript
+
+AI Engine: Google Gemini (Clinical reasoning & response generation)
+
+Authentication: Supabase
+
+Reports: PDF generation with structured medical data
+
+Hosting: Firebase / Google Cloud (planned)
+
+🚀 Vision
+
+MedScan AI aims to become a first-level digital health companion —
+not replacing doctors, but helping users make calm, informed decisions about their health.
+
+⚠️ Disclaimer
+
+MedScan AI provides medical information for educational purposes only.
+It does not replace professional medical advice, diagnosis, or treatment.
+Always consult a qualified healthcare provider for serious conditions.
